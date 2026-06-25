@@ -1,10 +1,12 @@
-const STORAGE_KEY='planner-vienna-v1';
+const STORAGE_KEY='planner-vienna-v2';
 const el=id=>document.getElementById(id);
 const pad=n=>String(n).padStart(2,'0');
 const toMin=t=>{const [h,m]=t.split(':').map(Number);return h*60+m};
 const toTime=m=>`${pad(Math.floor(m/60)%24)}:${pad(m%60)}`;
-const maps=q=>`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q+' Vienna')}`;
 const uid=()=>Math.random().toString(36).slice(2,9);
+let expanded=new Set();
+let lastMovedId=null;
+let lastDurationId=null;
 
 const initialDays=[
  {id:'d1',title:'Day 1 - Cathedral + Belvedere + pre-dinner options',date:'Thu, June 25',start:'07:30',items:[
@@ -77,15 +79,9 @@ const eventOptions=[
  {dur:180,title:'DDSG Heurigen Cruise with Viennese Songs',detail:'Boat ride with Viennese songs and Heurigen-style food.',kind:'option'}
 ];
 const foodOptions={
- Breakfast:[
-  ['Cafe Eiles','Day 1/3 · Viennese coffeehouse · mostly EUR 10-20 · 6-12 min'],['Cafe Hummel','Day 1/3 · neighborhood Viennese cafe · EUR 7-19 · 7-13 min'],['Schönbrunner Schlosscafe','Day 2 · palace-area cafe breakfast · 30 min'],['Gerstner Schönbrunn','Day 2 · Viennese cafe / pastry · 30 min'],['Bäckerei Café Felzl','Bakery breakfast · early practical option'],['Ströck Feierabend Burggasse','Austrian bakery-cafe · early practical option'],['POC - People on Caffeine','Specialty coffee / light breakfast'],['Jonas Reindl Coffee Roasters','Specialty coffee · Day 3 option'],['Oefferl Bio-Bäckerei & Bistro','Organic bakery / bistro'],['ULRICH','Modern brunch']
- ],
- Lunch:[
-  ['Anna’s Schnitzel Stube','Austrian schnitzel · cheap/local near hotel'],['Zur Böhmischen Kuchl','Bohemian/Austrian · weekday-only'],['Salm Bräu','Austrian brewery food near Belvedere'],['Cafe Goldegg','Viennese cafe near Belvedere'],['Della Lucia','Italian/European near Schönbrunn'],['Cafe Raimann','Viennese cafe / Austrian casual near Schönbrunn'],['Fromme Helene','Austrian / Viennese near museum/hotel side'],['Cafe Landtmann','Classic Viennese cafe near center'],['Via Toledo Enopizzeria','Pizza, very close to hotel'],['Pizzeria Scarabocchio','Pizza/pasta fallback'],['Cafe Merkur','Cheap neighborhood cafe'],['Schnitzelwirt','Austrian schnitzel'],['Gasthaus Rebhuhn','Traditional Austrian Beisl'],['Das Kolin','European cafe-restaurant']
- ],
- Dinner:[
-  ['Figlmüller Bäckerstraße','Viennese schnitzel / Austrian'],['Griechenbeisl','Historic Austrian restaurant'],['Rebhuhn','Austrian pub / schnitzel / goulash'],['Cafe Benno','Casual Austrian / cafe-pub'],['Das Käuzchen','Austrian Beisl'],['Wildling Restaurant & Bar','Modern Austrian regional tapas'],['Fromme Helene','Classic Austrian'],['Restaurant Marienhof','Austrian / Wiener'],['Batoni Restaurant','Georgian, budget-friendly'],['Der Wiener Deewan','Pakistani buffet, pay-as-you-wish'],['Alt Wiener Gastwirtschaft Schilling','Traditional Austrian']
- ]
+ Breakfast:[['Cafe Eiles','Day 1/3 · Viennese coffeehouse · mostly EUR 10-20 · 6-12 min'],['Cafe Hummel','Day 1/3 · neighborhood Viennese cafe · EUR 7-19 · 7-13 min'],['Schönbrunner Schlosscafe','Day 2 · palace-area cafe breakfast · 30 min'],['Gerstner Schönbrunn','Day 2 · Viennese cafe / pastry · 30 min'],['Bäckerei Café Felzl','Bakery breakfast · early practical option'],['Ströck Feierabend Burggasse','Austrian bakery-cafe · early practical option'],['POC - People on Caffeine','Specialty coffee / light breakfast'],['Jonas Reindl Coffee Roasters','Specialty coffee · Day 3 option'],['Oefferl Bio-Bäckerei & Bistro','Organic bakery / bistro'],['ULRICH','Modern brunch']],
+ Lunch:[['Anna’s Schnitzel Stube','Austrian schnitzel · cheap/local near hotel'],['Zur Böhmischen Kuchl','Bohemian/Austrian · weekday-only'],['Salm Bräu','Austrian brewery food near Belvedere'],['Cafe Goldegg','Viennese cafe near Belvedere'],['Della Lucia','Italian/European near Schönbrunn'],['Cafe Raimann','Viennese cafe / Austrian casual near Schönbrunn'],['Fromme Helene','Austrian / Viennese near museum/hotel side'],['Cafe Landtmann','Classic Viennese cafe near center'],['Via Toledo Enopizzeria','Pizza, very close to hotel'],['Pizzeria Scarabocchio','Pizza/pasta fallback'],['Cafe Merkur','Cheap neighborhood cafe'],['Schnitzelwirt','Austrian schnitzel'],['Gasthaus Rebhuhn','Traditional Austrian Beisl'],['Das Kolin','European cafe-restaurant']],
+ Dinner:[['Figlmüller Bäckerstraße','Viennese schnitzel / Austrian'],['Griechenbeisl','Historic Austrian restaurant'],['Rebhuhn','Austrian pub / schnitzel / goulash'],['Cafe Benno','Casual Austrian / cafe-pub'],['Das Käuzchen','Austrian Beisl'],['Wildling Restaurant & Bar','Modern Austrian regional tapas'],['Fromme Helene','Classic Austrian'],['Restaurant Marienhof','Austrian / Wiener'],['Batoni Restaurant','Georgian, budget-friendly'],['Der Wiener Deewan','Pakistani buffet, pay-as-you-wish'],['Alt Wiener Gastwirtschaft Schilling','Traditional Austrian']]
 };
 const treats={
  'Old center / Cathedral / Hofburg':[['Eis-Greissler Rotenturmstrasse','Creative Austrian ice cream · about 3-8 min from cathedral/Hofburg route'],['Zanoni & Zanoni','Classic central ice cream / gelato / pastries · 5-7 min from St. Stephen’s'],['Leones Gelato','Well-known gelato · 10-15 min from Hofburg / center']],
@@ -99,18 +95,23 @@ let state=loadState();
 let drag={mode:null,dayId:null,itemId:null,newItem:null};
 function loadState(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY))||structuredClone(initialDays)}catch{return structuredClone(initialDays)}}
 function saveState(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state))}
-function toast(msg){let t=document.createElement('div');t.className='toast';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),1400)}
-function itemTitle(item){if(item.base&&item.options){return `${item.base}: ${item.options[item.selected||0]}`}return item.title}
+function toast(msg){let t=document.createElement('div');t.className='toast';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),1100)}
+function itemTitle(item){return item.base&&item.options?`${item.base}: ${item.options[item.selected||0]}`:item.title}
 function render(){renderDays();renderEventOptions();renderFoodOptions();renderTreats();saveState()}
-function renderDays(){el('days').innerHTML=state.map(day=>{
- let current=toMin(day.start), cards='';
- day.items.forEach((item,idx)=>{const start=current,end=current+item.dur;current=end;cards+=cardHTML(day.id,item,idx,start,end)});
- return `<article class="day"><div class="day-head"><p class="eyebrow">Vienna</p><h2>${day.title}</h2><div class="day-meta"><span>${day.date}</span><span>Start ${day.start}</span><span>Ends ${toTime(current)}</span></div></div><div class="day-list" data-day="${day.id}">${cards}</div></article>`}).join('');
- bindScheduleDnD();bindButtons();}
+function renderDays(){
+ el('days').innerHTML=state.map(day=>{
+  let current=toMin(day.start), cards='';
+  day.items.forEach((item,idx)=>{const start=current,end=current+item.dur;current=end;cards+=cardHTML(day.id,item,idx,start,end)});
+  return `<article class="day"><div class="day-head"><p class="eyebrow">Vienna</p><h2>${day.title}</h2><div class="day-meta"><span>${day.date}</span><span>Start ${day.start}</span><span>Ends ${toTime(current)}</span></div></div><div class="day-list" data-day="${day.id}">${cards}</div></article>`
+ }).join('');
+ bindScheduleDnD();bindButtons();animateLast();
+}
 function cardHTML(dayId,item,idx,start,end){
+ const open=expanded.has(item.id);
  const chips=(item.options||[]).map((o,i)=>`<button class="option-chip ${i===(item.selected||0)?'active':''}" data-day="${dayId}" data-item="${item.id}" data-select="${i}">${o}</button>`).join('');
  const tags=(item.tags||[]).concat(item.kind).map(t=>`<span class="tag">${t}</span>`).join('');
- return `<section class="event-card" draggable="true" data-kind="${item.kind}" data-day="${dayId}" data-item="${item.id}"><div class="time-row"><span class="time">${toTime(start)}-${toTime(end)}</span><span class="duration">${item.dur} min</span></div><div class="title-row"><h3>${itemTitle(item)}</h3><div class="reorder"><button data-move="up" data-day="${dayId}" data-item="${item.id}">↑</button><button data-move="down" data-day="${dayId}" data-item="${item.id}">↓</button></div></div><p class="note">${item.note||''}</p><div class="tags">${chips}${tags}</div></section>`}
+ return `<section class="event-card ${open?'open':''}" draggable="true" data-kind="${item.kind}" data-day="${dayId}" data-item="${item.id}"><div class="tap-zone" data-open="${item.id}"><div class="time-row"><span class="time">${toTime(start)}-${toTime(end)}</span><span class="duration">${item.dur} min</span></div><div class="title-row"><h3>${itemTitle(item)}</h3><button class="open-btn" data-open="${item.id}" aria-label="Open event">${open?'×':'+'}</button></div></div><div class="card-details"><p class="note">${item.note||''}</p><div class="time-tools"><button data-duration="-10" data-day="${dayId}" data-item="${item.id}">−10</button><span>${item.dur} min</span><button data-duration="10" data-day="${dayId}" data-item="${item.id}">+10</button></div><div class="reorder"><button data-move="up" data-day="${dayId}" data-item="${item.id}">↑</button><button data-move="down" data-day="${dayId}" data-item="${item.id}">↓</button></div><div class="tags">${chips}${tags}</div></div></section>`;
+}
 function bindScheduleDnD(){
  document.querySelectorAll('.event-card').forEach(card=>{
   card.addEventListener('dragstart',e=>{drag={mode:'move',dayId:card.dataset.day,itemId:card.dataset.item};card.classList.add('dragging');e.dataTransfer.effectAllowed='move'});
@@ -125,8 +126,15 @@ function bindScheduleDnD(){
  });
 }
 function bindButtons(){
- document.querySelectorAll('[data-move]').forEach(b=>b.addEventListener('click',()=>moveButton(b.dataset.day,b.dataset.item,b.dataset.move)));
- document.querySelectorAll('[data-select]').forEach(b=>b.addEventListener('click',()=>{const d=state.find(x=>x.id===b.dataset.day);const it=d.items.find(x=>x.id===b.dataset.item);it.selected=Number(b.dataset.select);render()}));
+ document.querySelectorAll('[data-open]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const id=b.dataset.open;expanded.has(id)?expanded.delete(id):expanded.add(id);lastMovedId=id;render()}));
+ document.querySelectorAll('[data-duration]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const d=state.find(x=>x.id===b.dataset.day);const it=d?.items.find(x=>x.id===b.dataset.item);if(!it)return;it.dur=Math.max(10,(it.dur||10)+Number(b.dataset.duration));expanded.add(it.id);lastDurationId=it.id;lastMovedId=it.id;render();toast(`${it.dur} min`)}));
+ document.querySelectorAll('[data-move]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();moveButton(b.dataset.day,b.dataset.item,b.dataset.move)}));
+ document.querySelectorAll('[data-select]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const d=state.find(x=>x.id===b.dataset.day);const it=d.items.find(x=>x.id===b.dataset.item);it.selected=Number(b.dataset.select);expanded.add(it.id);lastMovedId=it.id;render()}));
+}
+function animateLast(){
+ document.querySelectorAll('.day-list').forEach(list=>{list.classList.add('reflowing');setTimeout(()=>list.classList.remove('reflowing'),360)});
+ if(lastMovedId){const moved=document.querySelector(`.event-card[data-item="${lastMovedId}"]`);if(moved){moved.classList.add('moved','just-switched');setTimeout(()=>moved.classList.remove('just-switched'),900)}}
+ if(lastDurationId){const changed=document.querySelector(`.event-card[data-item="${lastDurationId}"]`);if(changed){changed.classList.add('duration-changed');setTimeout(()=>changed.classList.remove('duration-changed'),700)}}
 }
 function handleDrop(targetDayId,beforeItemId){
  if(!drag.mode)return;
@@ -134,23 +142,18 @@ function handleDrop(targetDayId,beforeItemId){
  if(drag.mode==='new'){
   const item={...drag.newItem,id:uid()};
   const at=beforeItemId?target.items.findIndex(i=>i.id===beforeItemId):target.items.length;
-  target.items.splice(at<0?target.items.length:at,0,item);render();toast('Added to schedule');return;
+  target.items.splice(at<0?target.items.length:at,0,item);expanded.add(item.id);lastMovedId=item.id;render();toast('Added');return;
  }
  const source=state.find(d=>d.id===drag.dayId);const idx=source.items.findIndex(i=>i.id===drag.itemId);if(idx<0)return;
- const [item]=source.items.splice(idx,1);let at=beforeItemId?target.items.findIndex(i=>i.id===beforeItemId):target.items.length;if(at<0)at=target.items.length;target.items.splice(at,0,item);render();toast('Schedule updated');
+ const [item]=source.items.splice(idx,1);let at=beforeItemId?target.items.findIndex(i=>i.id===beforeItemId):target.items.length;if(at<0)at=target.items.length;target.items.splice(at,0,item);expanded.add(item.id);lastMovedId=item.id;render();toast('Updated');
 }
-function moveButton(dayId,itemId,dir){const d=state.find(x=>x.id===dayId);const i=d.items.findIndex(x=>x.id===itemId);const j=dir==='up'?i-1:i+1;if(i<0||j<0||j>=d.items.length)return;[d.items[i],d.items[j]]=[d.items[j],d.items[i]];render()}
-function renderEventOptions(){
- const groups={};eventOptions.forEach(o=>{(groups[o.dur]??=[]).push(o)});
- el('eventOptions').innerHTML=Object.keys(groups).sort((a,b)=>a-b).map(k=>bucketHTML(`${k} minutes`,groups[k].map(o=>optionHTML(o.title,o.detail,{kind:o.kind||'option',title:o.title,dur:Number(k),note:o.detail,tags:['added']})).join(''))).join('');bindOptionDrag();}
-function renderFoodOptions(){
- el('foodOptions').innerHTML=Object.entries(foodOptions).map(([meal,items])=>bucketHTML(meal,items.map(([name,detail])=>optionHTML(name,detail,{kind:'food',base:meal,selected:0,options:[name],dur:meal==='Breakfast'?30:meal==='Lunch'?60:90,note:detail,tags:['food']})).join(''))).join('');bindOptionDrag();}
-function renderTreats(){
- el('treatOptions').innerHTML=Object.entries(treats).map(([loc,items])=>bucketHTML(loc,items.map(([name,detail])=>optionHTML(name,detail,{kind:'option',title:name,dur:20,note:detail,tags:['ice cream','treat']})).join(''))).join('');bindOptionDrag();}
+function moveButton(dayId,itemId,dir){const d=state.find(x=>x.id===dayId);const i=d.items.findIndex(x=>x.id===itemId);const j=dir==='up'?i-1:i+1;if(i<0||j<0||j>=d.items.length)return;[d.items[i],d.items[j]]=[d.items[j],d.items[i]];expanded.add(itemId);lastMovedId=itemId;render();toast('Updated')}
+function renderEventOptions(){const groups={};eventOptions.forEach(o=>{(groups[o.dur]??=[]).push(o)});el('eventOptions').innerHTML=Object.keys(groups).sort((a,b)=>a-b).map(k=>bucketHTML(`${k} minutes`,groups[k].map(o=>optionHTML(o.title,o.detail,{kind:o.kind||'option',title:o.title,dur:Number(k),note:o.detail,tags:['added']})).join(''))).join('');bindOptionDrag()}
+function renderFoodOptions(){el('foodOptions').innerHTML=Object.entries(foodOptions).map(([meal,items])=>bucketHTML(meal,items.map(([name,detail])=>optionHTML(name,detail,{kind:'food',base:meal,selected:0,options:[name],dur:meal==='Breakfast'?30:meal==='Lunch'?60:90,note:detail,tags:['food']})).join(''))).join('');bindOptionDrag()}
+function renderTreats(){el('treatOptions').innerHTML=Object.entries(treats).map(([loc,items])=>bucketHTML(loc,items.map(([name,detail])=>optionHTML(name,detail,{kind:'option',title:name,dur:20,note:detail,tags:['ice cream','treat']})).join(''))).join('');bindOptionDrag()}
 function bucketHTML(title,inner){return `<div class="bucket"><h3>${title}</h3>${inner}</div>`}
-function optionHTML(name,detail,item){return `<div class="option-card" draggable="true" data-new='${JSON.stringify(item).replaceAll("'",'&apos;')}'><strong>${name}</strong><span>${detail}</span><span class="mini">Drag into a day</span></div>`}
+function optionHTML(name,detail,item){return `<div class="option-card compact-option" draggable="true" data-new='${JSON.stringify(item).replaceAll("'",'&apos;')}'><strong>${name}</strong><span>${detail}</span></div>`}
 function bindOptionDrag(){document.querySelectorAll('.option-card').forEach(c=>c.addEventListener('dragstart',e=>{drag={mode:'new',newItem:JSON.parse(c.dataset.new.replaceAll('&apos;',"'"))};e.dataTransfer.effectAllowed='copy'}))}
-
-el('saveBtn').addEventListener('click',()=>{saveState();toast('Saved on this device')});
-el('resetBtn').addEventListener('click',()=>{state=structuredClone(initialDays);saveState();render();toast('Vienna reset')});
+el('saveBtn').addEventListener('click',()=>{saveState();toast('Saved')});
+el('resetBtn').addEventListener('click',()=>{state=structuredClone(initialDays);expanded.clear();lastMovedId=null;lastDurationId=null;saveState();render();toast('Reset')});
 render();
