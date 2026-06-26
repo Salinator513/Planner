@@ -11,15 +11,16 @@ const compactDays=[
   {id:'c1-9',kind:'food',base:'Dinner',selected:0,options:['Figlmüller Bäckerstraße','Griechenbeisl'],dur:60,note:'One hour for dinner in the center. Pick the easier reservation or route rather than adding another sightseeing detour before eating.'},
   {id:'c1-10',kind:'transit',title:'Return to hotel / end of day',dur:30,note:'Return to Laudongasse 8 and leave the rest of the evening open. This is intentionally not another planned walk.'}
  ]},
- {id:'d2',title:'Day 2 - Schönbrunn only',date:'Fri, June 26',start:'08:00',items:[
+ {id:'d2',title:'Day 2 - Schönbrunn + relaxed afternoon',date:'Fri, June 26',start:'08:00',items:[
   {id:'c2-1',kind:'fixed',title:'Wake up',dur:30,note:'Later, calmer start for the palace day. Check the route to Schönbrunn and leave with enough time that breakfast and the palace visit do not feel compressed.',tags:['hotel','start']},
   {id:'c2-2',kind:'transit',title:'Transit to Schönbrunn',dur:40,note:'Travel toward Schönbrunn with enough buffer for walking through the station and palace grounds. Do not add a separate city walk before this.'},
   {id:'c2-3',kind:'food',base:'Breakfast at / near Schönbrunn',selected:0,options:['Schönbrunner Schlosscafe','Gerstner Schönbrunn'],dur:60,note:'One full hour for breakfast or pastry near the palace area. This keeps the morning steady and avoids needing a second food stop too soon.'},
   {id:'c2-4',kind:'option',title:'Schönbrunn Gardens',dur:90,note:'The one walk for Day 2. Use the garden axis, fountains, and exterior palace views as the outdoor portion of the day instead of stacking extra park or evening walks.',tags:['one walk','palace']},
   {id:'c2-5',kind:'fixed',title:'Schönbrunn Palace',dur:165,note:'Main planned sight for the day. Keep the focus on the imperial rooms and palace story, then leave space afterward instead of forcing multiple replacement attractions.',tags:['major sight','ticket']},
   {id:'c2-6',kind:'food',base:'Lunch near Schönbrunn',selected:1,options:['Della Lucia','Cafe Raimann'],dur:60,note:'One hour for lunch close to Schönbrunn. This is the reset after the palace block, not the start of another packed sequence.'},
-  {id:'c2-7',kind:'food',base:'Dinner',selected:0,options:['Rebhuhn','Cafe Benno'],dur:60,note:'One hour for dinner back toward the hotel side. Keep the evening open unless you deliberately add one option from the bank later.'},
-  {id:'c2-8',kind:'transit',title:'Return to hotel / open evening',dur:40,note:'Return after dinner and leave the night unplanned. This creates the empty space that was missing from the earlier version.'}
+  {id:'c2-7',kind:'option',base:'Afternoon before dinner',selected:0,options:['Auer-Welsbach-Park rest','Schönbrunn Palm House','Schönbrunn Desert House','Cafe Dommayer cake break','Landtmann Jausen Station treat stop'],dur:75,note:'One relaxed pre-dinner choice after lunch. Pick only one: a shaded park break, one small Schönbrunn-area attraction, or a cafe/treat stop. This adds something to the afternoon without rebuilding the day into a packed itinerary.',tags:['afternoon','choose one']},
+  {id:'c2-8',kind:'food',base:'Dinner',selected:0,options:['Rebhuhn','Cafe Benno'],dur:60,note:'One hour for dinner back toward the hotel side. Keep the evening open unless you deliberately add one option from the bank later.'},
+  {id:'c2-9',kind:'transit',title:'Return to hotel / open evening',dur:40,note:'Return after dinner and leave the night unplanned. This creates the empty space that was missing from the earlier version.'}
  ]},
  {id:'d3',title:'Day 3 - KHM + Karlskirche + Cruise',date:'Sat, June 27',start:'08:30',items:[
   {id:'c3-1',kind:'fixed',title:'Wake up',dur:30,note:'Day 3 now starts later at 8:30. This gives more recovery time before the museum and cruise day instead of beginning too early.',tags:['hotel','start']},
@@ -37,13 +38,13 @@ const compactDays=[
 ];
 initialDays.length=0;
 compactDays.forEach(d=>initialDays.push(structuredClone(d)));
-if(localStorage.getItem('planner-vienna-compact-version')!=='1'){
+if(localStorage.getItem('planner-vienna-compact-version')!=='2'){
   state=structuredClone(compactDays);
   expanded.clear();
   lastMovedId=null;
   lastDurationId=null;
   localStorage.setItem('planner-vienna-v2',JSON.stringify(state));
-  localStorage.setItem('planner-vienna-compact-version','1');
+  localStorage.setItem('planner-vienna-compact-version','2');
   render();
 } else {
   render();
